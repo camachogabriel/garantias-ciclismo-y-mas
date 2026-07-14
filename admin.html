@@ -113,10 +113,9 @@
           <div class="section-title">Fotos</div>
           <div class="photos" id="dPhotos"></div>
           <div style="margin-top:12px">
-            <label>Subir foto ángulo 1</label>
-            <input type="file" id="upPhoto1" accept="image/*">
-            <label>Subir foto ángulo 2</label>
-            <input type="file" id="upPhoto2" accept="image/*">
+            <label>Agregar fotos (equipo)</label>
+            <input type="file" id="upPhotos" accept="image/*" multiple>
+            <div style="font-size:.75rem;color:var(--muted);margin-top:3px">Puedes seleccionar varias; se agregan a las existentes.</div>
           </div>
         </div>
         <div>
@@ -230,16 +229,17 @@ window.openDetail = async function(id) {
   $('fCode1').value = current.code_1 || '';
   $('fCode2').value = current.code_2 || '';
   $('fEmailNote').value = '';
-  $('upPhoto1').value = ''; $('upPhoto2').value = '';
+  $('upPhotos').value = '';
   renderPhotos();
   loadHistory(id);
 };
 function renderPhotos() {
+  const clientPhotos = (current.customer_photos?.length ? current.customer_photos : [current.customer_photo_url].filter(Boolean));
+  const adminPhotos = (current.admin_photos?.length ? current.admin_photos : [current.photo_angle_1, current.photo_angle_2].filter(Boolean));
   const items = [
-    [current.customer_photo_url, 'Foto del cliente'],
-    [current.photo_angle_1, 'Ángulo 1'],
-    [current.photo_angle_2, 'Ángulo 2'],
-  ].filter(([u]) => u);
+    ...clientPhotos.map((u, i) => [u, `Cliente ${i + 1}`]),
+    ...adminPhotos.map((u, i) => [u, `Equipo ${i + 1}`]),
+  ];
   $('dPhotos').innerHTML = items.length
     ? items.map(([u, c]) => `<figure><img src="${u}" onclick="window.open('${u}')"><figcaption>${c}</figcaption></figure>`).join('')
     : '<span style="color:var(--muted); font-size:.85rem">Sin fotos</span>';
@@ -252,14 +252,17 @@ async function loadHistory(id) {
 }
 $('backBtn').addEventListener('click', showList);
 
-async function uploadIfSelected(inputId, suffix) {
-  const file = $(inputId).files[0];
-  if (!file) return null;
-  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
-  const path = `admin/${current.id}-${suffix}-${Date.now()}.${ext}`;
-  const { error } = await db.storage.from('warranty-photos').upload(path, file);
-  if (error) throw new Error('Error subiendo foto: ' + error.message);
-  return db.storage.from('warranty-photos').getPublicUrl(path).data.publicUrl;
+async function uploadSelectedPhotos() {
+  const files = [...$('upPhotos').files];
+  const urls = [];
+  for (const file of files) {
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+    const path = `admin/${current.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.${ext}`;
+    const { error } = await db.storage.from('warranty-photos').upload(path, file);
+    if (error) throw new Error('Error subiendo foto: ' + error.message);
+    urls.push(db.storage.from('warranty-photos').getPublicUrl(path).data.publicUrl);
+  }
+  return urls;
 }
 
 async function save(sendEmail) {
@@ -268,8 +271,7 @@ async function save(sendEmail) {
   const msg = $('detailMsg');
   msg.style.display = 'none';
   try {
-    const p1 = await uploadIfSelected('upPhoto1', 'a1');
-    const p2 = await uploadIfSelected('upPhoto2', 'a2');
+    const newPhotos = await uploadSelectedPhotos();
     const update = {
       status: $('fStatus').value,
       admin_notes: $('fNotes').value || null,
@@ -278,8 +280,11 @@ async function save(sendEmail) {
       code_1: $('fCode1').value || null,
       code_2: $('fCode2').value || null,
     };
-    if (p1) update.photo_angle_1 = p1;
-    if (p2) update.photo_angle_2 = p2;
+    if (newPhotos.length) {
+      const existing = current.admin_photos?.length ? current.admin_photos
+        : [current.photo_angle_1, current.photo_angle_2].filter(Boolean);
+      update.admin_photos = [...existing, ...newPhotos];
+    }
     const { error } = await db.from('warranties').update(update).eq('id', current.id);
     if (error) throw new Error(error.message);
 

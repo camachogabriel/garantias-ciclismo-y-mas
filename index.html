@@ -67,9 +67,10 @@
       <label for="purchaseDate">Fecha de compra</label>
       <input id="purchaseDate" type="date">
 
-      <label class="req" for="photo">Foto del potenciómetro</label>
-      <input id="photo" type="file" accept="image/*" required>
-      <div class="hint">JPG, PNG o WebP. Máximo 10 MB.</div>
+      <label class="req" for="photo">Fotos del potenciómetro</label>
+      <input id="photo" type="file" accept="image/*" multiple required>
+      <div class="hint">Puedes seleccionar hasta 6 fotos (mantén presionado Cmd/Ctrl para elegir varias). JPG, PNG o WebP, máx. 10 MB cada una.</div>
+      <div class="hint" id="photoCount" style="font-weight:600"></div>
 
       <label for="defectNotes">Notas del defecto</label>
       <textarea id="defectNotes" maxlength="2000" placeholder="Describe el problema que presenta el equipo"></textarea>
@@ -97,6 +98,11 @@ const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const brandSel = document.getElementById('brand');
 MARCAS.forEach(m => brandSel.add(new Option(m, m)));
 
+document.getElementById('photo').addEventListener('change', (e) => {
+  const n = e.target.files.length;
+  document.getElementById('photoCount').textContent = n ? `${n} foto${n > 1 ? 's' : ''} seleccionada${n > 1 ? 's' : ''}` : '';
+});
+
 const form = document.getElementById('warrantyForm');
 const btn = document.getElementById('submitBtn');
 const errorMsg = document.getElementById('errorMsg');
@@ -108,14 +114,18 @@ form.addEventListener('submit', async (e) => {
   btn.textContent = 'Enviando…';
 
   try {
-    // 1. Subir foto
-    const file = document.getElementById('photo').files[0];
-    if (file.size > 10 * 1024 * 1024) throw new Error('La foto supera los 10 MB.');
-    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
-    const path = `clientes/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-    const { error: upErr } = await db.storage.from('warranty-photos').upload(path, file);
-    if (upErr) throw new Error('No se pudo subir la foto: ' + upErr.message);
-    const photoUrl = db.storage.from('warranty-photos').getPublicUrl(path).data.publicUrl;
+    // 1. Subir fotos (hasta 6)
+    const files = [...document.getElementById('photo').files];
+    if (files.length > 6) throw new Error('Máximo 6 fotos.');
+    const photoUrls = [];
+    for (const file of files) {
+      if (file.size > 10 * 1024 * 1024) throw new Error(`La foto "${file.name}" supera los 10 MB.`);
+      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+      const path = `clientes/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { error: upErr } = await db.storage.from('warranty-photos').upload(path, file);
+      if (upErr) throw new Error('No se pudo subir la foto: ' + upErr.message);
+      photoUrls.push(db.storage.from('warranty-photos').getPublicUrl(path).data.publicUrl);
+    }
 
     // 2. Registrar garantía
     const { data: code, error } = await db.rpc('submit_warranty', {
@@ -127,7 +137,7 @@ form.addEventListener('submit', async (e) => {
       p_model: document.getElementById('model').value,
       p_purchase_date: document.getElementById('purchaseDate').value || null,
       p_defect_notes: document.getElementById('defectNotes').value || null,
-      p_customer_photo_url: photoUrl,
+      p_photos: photoUrls,
     });
     if (error) throw new Error(error.message);
 
