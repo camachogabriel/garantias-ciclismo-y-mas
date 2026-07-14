@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panel de Garantías — Ciclismo y Más</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/config.js"></script>
+<style>
+  :root { --primary:#0f766e; --primary-dark:#115e59; --bg:#f1f5f9; --border:#e2e8f0; --text:#0f172a; --muted:#64748b; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'Segoe UI',system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+  header { background:var(--primary); color:#fff; padding:14px 20px; display:flex; justify-content:space-between; align-items:center; }
+  header h1 { font-size:1.1rem; }
+  header button { background:rgba(255,255,255,.15); color:#fff; border:none; padding:7px 14px; border-radius:6px; cursor:pointer; font-size:.85rem; }
+  .container { max-width:1100px; margin:20px auto; padding:0 16px; }
+  .card { background:#fff; border:1px solid var(--border); border-radius:10px; padding:20px; }
+  /* Login */
+  #loginView { max-width:380px; margin:60px auto; }
+  #loginView h2 { margin-bottom:16px; text-align:center; color:var(--primary); }
+  label { display:block; font-weight:600; font-size:.85rem; margin:14px 0 5px; }
+  input, select, textarea { width:100%; padding:9px 11px; border:1px solid var(--border); border-radius:7px; font-size:.92rem; font-family:inherit; }
+  input:focus, select:focus, textarea:focus { outline:2px solid var(--primary); border-color:transparent; }
+  .btn { padding:10px 18px; background:var(--primary); color:#fff; border:none; border-radius:7px; font-weight:600; cursor:pointer; font-size:.92rem; }
+  .btn:hover { background:var(--primary-dark); }
+  .btn:disabled { opacity:.6; cursor:wait; }
+  .btn.secondary { background:#fff; color:var(--text); border:1px solid var(--border); }
+  .btn.block { width:100%; margin-top:18px; }
+  .msg { margin-top:12px; padding:10px 12px; border-radius:7px; font-size:.87rem; display:none; }
+  .msg.error { display:block; background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; }
+  .msg.ok { display:block; background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; }
+  /* Lista */
+  .toolbar { display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap; }
+  .toolbar input { flex:1; min-width:200px; }
+  .toolbar select { width:auto; }
+  table { width:100%; border-collapse:collapse; font-size:.88rem; }
+  th { text-align:left; padding:10px 8px; border-bottom:2px solid var(--border); color:var(--muted); font-size:.78rem; text-transform:uppercase; letter-spacing:.5px; }
+  td { padding:10px 8px; border-bottom:1px solid #f1f5f9; }
+  tr.item { cursor:pointer; }
+  tr.item:hover { background:#f8fafc; }
+  .badge { display:inline-block; padding:3px 10px; border-radius:999px; color:#fff; font-size:.75rem; font-weight:600; white-space:nowrap; }
+  /* Detalle */
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:0 20px; }
+  @media (max-width:700px){ .grid2 { grid-template-columns:1fr; } }
+  .photos { display:flex; gap:12px; flex-wrap:wrap; margin-top:8px; }
+  .photos figure { width:150px; }
+  .photos img { width:100%; height:110px; object-fit:cover; border-radius:8px; border:1px solid var(--border); cursor:pointer; }
+  .photos figcaption { font-size:.72rem; color:var(--muted); text-align:center; margin-top:3px; }
+  .section-title { font-size:.8rem; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); border-bottom:1px solid var(--border); padding-bottom:6px; margin:22px 0 4px; }
+  .history { font-size:.83rem; }
+  .history li { list-style:none; padding:6px 0; border-bottom:1px dashed #f1f5f9; }
+  .actions { display:flex; gap:10px; margin-top:20px; flex-wrap:wrap; }
+  .info-row { padding:5px 0; font-size:.9rem; }
+  .info-row b { color:var(--muted); font-weight:600; font-size:.8rem; display:block; }
+  #detailView { display:none; }
+  .back { color:var(--primary); cursor:pointer; font-weight:600; font-size:.88rem; margin-bottom:12px; display:inline-block; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🚴 Panel de Garantías — Ciclismo y Más</h1>
+  <button id="logoutBtn" style="display:none">Cerrar sesión</button>
+</header>
+
+<div class="container">
+  <!-- LOGIN -->
+  <div id="loginView">
+    <div class="card">
+      <h2>Iniciar sesión</h2>
+      <form id="loginForm">
+        <label>Correo</label>
+        <input id="loginEmail" type="email" required>
+        <label>Contraseña</label>
+        <input id="loginPass" type="password" required>
+        <button class="btn block" type="submit">Entrar</button>
+        <div class="msg error" id="loginError"></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- LISTA -->
+  <div id="listView" style="display:none">
+    <div class="card">
+      <div class="toolbar">
+        <input id="search" placeholder="Buscar por código, nombre, correo o modelo…">
+        <select id="filterStatus">
+          <option value="">Todos los estados</option>
+        </select>
+        <button class="btn secondary" id="refreshBtn">↻ Actualizar</button>
+      </div>
+      <table>
+        <thead><tr><th>Código</th><th>Cliente</th><th>Equipo</th><th>Estado</th><th>Registrada</th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+      <p id="emptyMsg" style="display:none; color:var(--muted); text-align:center; padding:24px;">Sin resultados</p>
+    </div>
+  </div>
+
+  <!-- DETALLE -->
+  <div id="detailView">
+    <span class="back" id="backBtn">← Volver a la lista</span>
+    <div class="card">
+      <div class="grid2">
+        <div>
+          <div class="section-title">Cliente</div>
+          <div class="info-row"><b>Código</b><span id="dCode" style="font-weight:700"></span></div>
+          <div class="info-row"><b>Nombre</b><span id="dName"></span></div>
+          <div class="info-row"><b>Teléfonos</b><span id="dPhones"></span></div>
+          <div class="info-row"><b>Correo</b><span id="dEmail"></span></div>
+          <div class="info-row"><b>Equipo</b><span id="dEquipo"></span></div>
+          <div class="info-row"><b>Fecha de compra</b><span id="dPurchase"></span></div>
+          <div class="info-row"><b>Notas del defecto</b><span id="dDefect"></span></div>
+          <div class="section-title">Fotos</div>
+          <div class="photos" id="dPhotos"></div>
+          <div style="margin-top:12px">
+            <label>Subir foto ángulo 1</label>
+            <input type="file" id="upPhoto1" accept="image/*">
+            <label>Subir foto ángulo 2</label>
+            <input type="file" id="upPhoto2" accept="image/*">
+          </div>
+        </div>
+        <div>
+          <div class="section-title">Gestión</div>
+          <label>Estado</label>
+          <select id="fStatus"></select>
+          <label>Notas internas</label>
+          <textarea id="fNotes" rows="3"></textarea>
+          <label>Cobro (monto)</label>
+          <input id="fCharge" type="number" step="0.01" min="0" placeholder="0.00">
+          <label>Detalle del cobro</label>
+          <input id="fChargeNotes" placeholder="Ej: envío, repuesto…">
+          <label>Código 1 (biela)</label>
+          <input id="fCode1">
+          <label>Código 2 (biela)</label>
+          <input id="fCode2">
+          <div class="section-title">Correo al cliente</div>
+          <label>Nota para el cliente (se incluye en el correo)</label>
+          <textarea id="fEmailNote" rows="2" placeholder="Mensaje opcional para el cliente"></textarea>
+          <div class="actions">
+            <button class="btn" id="saveBtn">💾 Guardar</button>
+            <button class="btn" id="saveEmailBtn">📧 Guardar y enviar correo</button>
+          </div>
+          <div class="msg" id="detailMsg"></div>
+          <div class="section-title">Historial de estados</div>
+          <ul class="history" id="dHistory"></ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let warranties = [];
+let current = null;
+
+const $ = (id) => document.getElementById(id);
+const fmt = (d) => d ? new Date(d).toLocaleDateString('es-ES', { day:'2-digit', month:'short', year:'numeric' }) : '—';
+const fmtDT = (d) => new Date(d).toLocaleString('es-ES', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
+const badge = (s) => { const e = ESTADOS[s] || {label:s, color:'#64748b'}; return `<span class="badge" style="background:${e.color}">${e.label}</span>`; };
+
+// Poblar selects de estado
+Object.entries(ESTADOS).forEach(([k, v]) => {
+  $('filterStatus').add(new Option(v.label, k));
+  $('fStatus').add(new Option(v.label, k));
+});
+
+// ---------- Sesión ----------
+async function init() {
+  const { data: { session } } = await db.auth.getSession();
+  session ? showList() : showLogin();
+}
+function showLogin() { $('loginView').style.display='block'; $('listView').style.display='none'; $('detailView').style.display='none'; $('logoutBtn').style.display='none'; }
+async function showList() { $('loginView').style.display='none'; $('detailView').style.display='none'; $('listView').style.display='block'; $('logoutBtn').style.display='inline-block'; await loadWarranties(); }
+
+$('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('loginError').style.display='none';
+  const { error } = await db.auth.signInWithPassword({ email: $('loginEmail').value, password: $('loginPass').value });
+  if (error) { $('loginError').textContent = 'Credenciales incorrectas'; $('loginError').style.display='block'; return; }
+  showList();
+});
+$('logoutBtn').addEventListener('click', async () => { await db.auth.signOut(); showLogin(); });
+
+// ---------- Lista ----------
+async function loadWarranties() {
+  const { data, error } = await db.from('warranties').select('*').order('created_at', { ascending:false });
+  if (error) { alert('Error cargando garantías: ' + error.message); return; }
+  warranties = data;
+  renderList();
+}
+function renderList() {
+  const q = $('search').value.toLowerCase().trim();
+  const fs = $('filterStatus').value;
+  const rows = warranties.filter(w =>
+    (!fs || w.status === fs) &&
+    (!q || [w.tracking_code, w.full_name, w.email, w.model, w.brand].join(' ').toLowerCase().includes(q))
+  );
+  $('tbody').innerHTML = rows.map(w => `
+    <tr class="item" onclick="openDetail('${w.id}')">
+      <td><strong>${w.tracking_code}</strong></td>
+      <td>${w.full_name}</td>
+      <td>${w.brand} ${w.model}</td>
+      <td>${badge(w.status)}</td>
+      <td>${fmt(w.created_at)}</td>
+    </tr>`).join('');
+  $('emptyMsg').style.display = rows.length ? 'none' : 'block';
+}
+$('search').addEventListener('input', renderList);
+$('filterStatus').addEventListener('change', renderList);
+$('refreshBtn').addEventListener('click', loadWarranties);
+
+// ---------- Detalle ----------
+window.openDetail = async function(id) {
+  current = warranties.find(w => w.id === id);
+  if (!current) return;
+  $('listView').style.display='none'; $('detailView').style.display='block';
+  $('detailMsg').style.display='none'; $('detailMsg').className='msg';
+  $('dCode').textContent = current.tracking_code;
+  $('dName').textContent = current.full_name;
+  $('dPhones').textContent = [current.phone, current.phone_alt].filter(Boolean).join(' / ');
+  $('dEmail').textContent = current.email;
+  $('dEquipo').textContent = `${current.brand} ${current.model}`;
+  $('dPurchase').textContent = fmt(current.purchase_date);
+  $('dDefect').textContent = current.defect_notes || '—';
+  $('fStatus').value = current.status;
+  $('fNotes').value = current.admin_notes || '';
+  $('fCharge').value = current.charge_amount ?? '';
+  $('fChargeNotes').value = current.charge_notes || '';
+  $('fCode1').value = current.code_1 || '';
+  $('fCode2').value = current.code_2 || '';
+  $('fEmailNote').value = '';
+  $('upPhoto1').value = ''; $('upPhoto2').value = '';
+  renderPhotos();
+  loadHistory(id);
+};
+function renderPhotos() {
+  const items = [
+    [current.customer_photo_url, 'Foto del cliente'],
+    [current.photo_angle_1, 'Ángulo 1'],
+    [current.photo_angle_2, 'Ángulo 2'],
+  ].filter(([u]) => u);
+  $('dPhotos').innerHTML = items.length
+    ? items.map(([u, c]) => `<figure><img src="${u}" onclick="window.open('${u}')"><figcaption>${c}</figcaption></figure>`).join('')
+    : '<span style="color:var(--muted); font-size:.85rem">Sin fotos</span>';
+}
+async function loadHistory(id) {
+  const { data } = await db.from('warranty_status_history').select('*').eq('warranty_id', id).order('created_at', { ascending:false });
+  $('dHistory').innerHTML = (data || []).map(h =>
+    `<li>${fmtDT(h.created_at)} — ${(ESTADOS[h.old_status]||{label:h.old_status||'nueva'}).label} → <strong>${(ESTADOS[h.new_status]||{label:h.new_status}).label}</strong>${h.email_sent ? ' 📧' : ''}</li>`
+  ).join('') || '<li>Sin cambios registrados</li>';
+}
+$('backBtn').addEventListener('click', showList);
+
+async function uploadIfSelected(inputId, suffix) {
+  const file = $(inputId).files[0];
+  if (!file) return null;
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+  const path = `admin/${current.id}-${suffix}-${Date.now()}.${ext}`;
+  const { error } = await db.storage.from('warranty-photos').upload(path, file);
+  if (error) throw new Error('Error subiendo foto: ' + error.message);
+  return db.storage.from('warranty-photos').getPublicUrl(path).data.publicUrl;
+}
+
+async function save(sendEmail) {
+  const btn = sendEmail ? $('saveEmailBtn') : $('saveBtn');
+  btn.disabled = true;
+  const msg = $('detailMsg');
+  msg.style.display = 'none';
+  try {
+    const p1 = await uploadIfSelected('upPhoto1', 'a1');
+    const p2 = await uploadIfSelected('upPhoto2', 'a2');
+    const update = {
+      status: $('fStatus').value,
+      admin_notes: $('fNotes').value || null,
+      charge_amount: $('fCharge').value === '' ? null : parseFloat($('fCharge').value),
+      charge_notes: $('fChargeNotes').value || null,
+      code_1: $('fCode1').value || null,
+      code_2: $('fCode2').value || null,
+    };
+    if (p1) update.photo_angle_1 = p1;
+    if (p2) update.photo_angle_2 = p2;
+    const { error } = await db.from('warranties').update(update).eq('id', current.id);
+    if (error) throw new Error(error.message);
+
+    if (sendEmail) {
+      const { error: fnErr } = await db.functions.invoke('send-warranty-email', {
+        body: { tracking_code: current.tracking_code, type: 'actualizacion', note: $('fEmailNote').value || null },
+      });
+      if (fnErr) throw new Error('Guardado, pero el correo falló: ' + fnErr.message);
+    }
+    msg.className = 'msg ok';
+    msg.textContent = sendEmail ? '✓ Guardado y correo enviado' : '✓ Guardado';
+    msg.style.display = 'block';
+    await loadWarranties();
+    current = warranties.find(w => w.id === current.id);
+    renderPhotos();
+    loadHistory(current.id);
+  } catch (err) {
+    msg.className = 'msg error';
+    msg.textContent = err.message;
+    msg.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+  }
+}
+$('saveBtn').addEventListener('click', () => save(false));
+$('saveEmailBtn').addEventListener('click', () => save(true));
+
+init();
+</script>
+</body>
+</html>

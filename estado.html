@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Estado de Garantía — Ciclismo y Más</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/config.js"></script>
+<style>
+  :root { --primary:#0f766e; --primary-dark:#115e59; --bg:#f8fafc; --border:#e2e8f0; --text:#0f172a; --muted:#64748b; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'Segoe UI',system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+  header { background:var(--primary); color:#fff; padding:24px 16px; text-align:center; }
+  header h1 { font-size:1.4rem; }
+  header p { opacity:.85; font-size:.9rem; margin-top:4px; }
+  .container { max-width:480px; margin:24px auto 60px; padding:0 16px; }
+  .card { background:#fff; border:1px solid var(--border); border-radius:12px; padding:28px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+  label { display:block; font-weight:600; font-size:.88rem; margin-bottom:6px; }
+  input { width:100%; padding:12px; border:1px solid var(--border); border-radius:8px; font-size:1.1rem; text-transform:uppercase; letter-spacing:1px; text-align:center; }
+  input:focus { outline:2px solid var(--primary); border-color:transparent; }
+  button { width:100%; margin-top:16px; padding:13px; background:var(--primary); color:#fff; border:none; border-radius:8px; font-size:1rem; font-weight:600; cursor:pointer; }
+  button:hover { background:var(--primary-dark); }
+  button:disabled { opacity:.6; cursor:wait; }
+  .msg { margin-top:16px; padding:12px 14px; border-radius:8px; font-size:.9rem; display:none; }
+  .msg.error { display:block; background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; }
+  .result { display:none; margin-top:22px; border-top:1px solid var(--border); padding-top:22px; }
+  .badge { display:inline-block; padding:8px 18px; border-radius:999px; color:#fff; font-weight:700; font-size:1rem; }
+  .row { display:flex; justify-content:space-between; padding:9px 0; border-bottom:1px solid #f1f5f9; font-size:.92rem; }
+  .row span:first-child { color:var(--muted); }
+  .status-center { text-align:center; margin-bottom:18px; }
+  footer { text-align:center; color:var(--muted); font-size:.8rem; padding:20px; }
+  a { color:var(--primary); }
+</style>
+</head>
+<body>
+<header>
+  <h1>🚴 Ciclismo y Más</h1>
+  <p>Consulta el estado de tu garantía</p>
+</header>
+
+<div class="container">
+  <div class="card">
+    <form id="lookupForm">
+      <label for="code">Código de seguimiento</label>
+      <input id="code" placeholder="GC-XXXXXX" required maxlength="12" autocomplete="off">
+      <button type="submit" id="btn">Consultar</button>
+      <div class="msg error" id="errorMsg"></div>
+    </form>
+
+    <div class="result" id="result">
+      <div class="status-center">
+        <div class="badge" id="statusBadge"></div>
+      </div>
+      <div class="row"><span>Código</span><strong id="rCode"></strong></div>
+      <div class="row"><span>Equipo</span><span id="rEquipo"></span></div>
+      <div class="row"><span>Registrada</span><span id="rCreated"></span></div>
+      <div class="row"><span>Última actualización</span><span id="rUpdated"></span></div>
+    </div>
+  </div>
+  <p style="text-align:center; margin-top:16px; font-size:.85rem;">
+    ¿Aún no registras tu garantía? <a href="index.html">Regístrala aquí</a>
+  </p>
+</div>
+
+<footer>Ciclismo y Más — Sistema de garantías</footer>
+
+<script>
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const form = document.getElementById('lookupForm');
+const btn = document.getElementById('btn');
+const errorMsg = document.getElementById('errorMsg');
+const fmt = (d) => new Date(d).toLocaleDateString('es-ES', { day:'numeric', month:'long', year:'numeric' });
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  errorMsg.style.display = 'none';
+  document.getElementById('result').style.display = 'none';
+  btn.disabled = true; btn.textContent = 'Consultando…';
+  try {
+    const { data, error } = await db.rpc('get_warranty_status', {
+      p_code: document.getElementById('code').value,
+    });
+    if (error) throw new Error(error.message);
+    if (!data || data.length === 0) throw new Error('No encontramos una garantía con ese código. Verifica e intenta de nuevo.');
+    const w = data[0];
+    const est = ESTADOS[w.status] || { label: w.status, color: '#64748b' };
+    const badge = document.getElementById('statusBadge');
+    badge.textContent = est.label;
+    badge.style.background = est.color;
+    document.getElementById('rCode').textContent = w.tracking_code;
+    document.getElementById('rEquipo').textContent = `${w.brand} ${w.model}`;
+    document.getElementById('rCreated').textContent = fmt(w.created_at);
+    document.getElementById('rUpdated').textContent = fmt(w.updated_at);
+    document.getElementById('result').style.display = 'block';
+  } catch (err) {
+    errorMsg.textContent = err.message;
+    errorMsg.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Consultar';
+  }
+});
+</script>
+</body>
+</html>
