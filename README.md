@@ -23,17 +23,18 @@ Seguimiento de garantías de medidores de potencia (Favero, Sigeyi, XOSS, 4iiii)
 - **URL:** https://cejgurbaweucfpuzvdpw.supabase.co
 - **Tablas:** `warranties`, `warranty_status_history` (con RLS)
 - **Storage:** bucket `warranty-photos` (máx. 10 MB por foto)
-- **Edge Function:** `send-warranty-email` (correos vía Resend)
+- **Edge Function:** `send-warranty-email` (correos vía Brevo)
 - Migraciones en `supabase/migrations/` (ya aplicadas al proyecto).
 
 ## Configuración pendiente
 
-### 1. Correos (Resend)
-1. Crea una cuenta en [resend.com](https://resend.com) y genera una API key.
-2. En Supabase: **Edge Functions → send-warranty-email → Secrets**, agrega:
-   - `RESEND_API_KEY` — tu API key
-   - `FROM_EMAIL` — ej: `Ciclismo y Más <garantias@tudominio.com>` (dominio verificado en Resend; mientras tanto usa el default de pruebas)
-   - `STATUS_URL` — URL pública de `estado.html` (para el botón del correo)
+### 1. Correos (Brevo)
+Se usa la misma cuenta de Brevo del proyecto AthleteTrainLab. La configuración se lee primero de los secrets de la Edge Function y, si no existen, del Vault de Supabase:
+- `BREVO_API_KEY` — API key de Brevo (requerido)
+- `FROM_EMAIL` — remitente; default: `Ciclismo y Más <hola@athletetrainlab.com>`
+- `STATUS_URL` — URL pública de `estado.html` (para el botón del correo)
+
+Para configurar: dashboard → **Edge Functions → send-warranty-email → Secrets**, o guardar los valores en **Vault** con esos mismos nombres.
 
 ### 2. Usuario del panel admin
 En Supabase: **Authentication → Users → Add user** — crea el correo/contraseña del equipo.

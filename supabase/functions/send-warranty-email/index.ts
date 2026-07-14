@@ -1,8 +1,9 @@
 // Edge Function: send-warranty-email
-// Envía correos al cliente vía Resend.
+// Envía correos al cliente vía Brevo (https://api.brevo.com).
 // Tipos: 'registro' (código de seguimiento) | 'actualizacion' (cambio de estado + nota)
-// Secrets requeridos: RESEND_API_KEY, FROM_EMAIL (ej: "Ciclismo y Más <garantias@tudominio.com>")
-// Opcional: STATUS_URL (link a la página de consulta de estado)
+// Configuración (secret de Edge Function o secreto en Vault):
+//   BREVO_API_KEY (requerido), FROM_EMAIL (ej: "Ciclismo y Más <hola@tudominio.com>"),
+//   STATUS_URL (link a la página de consulta de estado)
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -31,15 +32,27 @@ Deno.serve(async (req: Request) => {
       return json({ error: "Parámetros inválidos" }, 400);
     }
 
-    const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
-    const FROM_EMAIL = Deno.env.get("FROM_EMAIL") ?? "Ciclismo y Más <onboarding@resend.dev>";
-    const STATUS_URL = Deno.env.get("STATUS_URL") ?? "";
-    if (!RESEND_API_KEY) return json({ error: "RESEND_API_KEY no configurada" }, 500);
-
     const db = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
+
+    // Config: primero variables de entorno, si no, Vault
+    const getConf = async (name: string): Promise<string | null> => {
+      const v = Deno.env.get(name);
+      if (v) return v;
+      const { data } = await db.rpc("get_secret", { p_name: name });
+      return data ?? null;
+    };
+
+    const BREVO_API_KEY = await getConf("BREVO_API_KEY");
+    if (!BREVO_API_KEY) return json({ error: "BREVO_API_KEY no configurada" }, 500);
+    const fromRaw = (await getConf("FROM_EMAIL")) ?? "Ciclismo y Más <hola@athletetrainlab.com>";
+    const STATUS_URL = (await getConf("STATUS_URL")) ?? "";
+    const mm = fromRaw.match(/^(.*)<(.+)>$/);
+    const sender = mm
+      ? { name: mm[1].trim(), email: mm[2].trim() }
+      : { name: "Ciclismo y Más", email: fromRaw.trim() };
 
     const { data: w, error } = await db
       .from("warranties")
@@ -86,14 +99,14 @@ Deno.serve(async (req: Request) => {
         </div>
       </div>`;
 
-    const res = await fetch("https://api.resend.com/emails", {
+    const res = await fetch("https://api.brevo.com/v3/smtp/email", {
       method: "POST",
-      headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: FROM_EMAIL, to: [w.email], subject, html }),
+      headers: { "Content-Type": "application/json", accept: "application/json", "api-key": BREVO_API_KEY },
+      body: JSON.stringify({ sender, to: [{ email: w.email, name: w.full_name }], subject, htmlContent: html }),
     });
     if (!res.ok) {
       const detail = await res.text();
-      return json({ error: "Resend rechazó el envío", detail }, 502);
+      return json({ error: "Brevo rechazó el envío", detail }, 502);
     }
 
     // Marcar el último cambio de estado como notificado
