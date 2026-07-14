@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Links — Sistema de Garantías</title>
+<style>
+  :root { --primary:#0f766e; --primary-dark:#115e59; --bg:#f8fafc; --border:#e2e8f0; --text:#0f172a; --muted:#64748b; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'Segoe UI',system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+  header { background:var(--primary); color:#fff; padding:24px 16px; text-align:center; }
+  header h1 { font-size:1.4rem; }
+  header p { opacity:.85; font-size:.9rem; margin-top:4px; }
+  .container { max-width:640px; margin:24px auto 60px; padding:0 16px; }
+  .section { font-size:.8rem; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin:26px 0 10px; }
+  .link-card { display:flex; align-items:center; gap:14px; background:#fff; border:1px solid var(--border); border-radius:12px; padding:16px 18px; margin-bottom:10px; box-shadow:0 1px 3px rgba(0,0,0,.05); }
+  .link-card .icon { font-size:1.6rem; }
+  .link-card .info { flex:1; min-width:0; }
+  .link-card .info a { color:var(--primary); font-weight:700; text-decoration:none; font-size:1rem; }
+  .link-card .info a:hover { text-decoration:underline; }
+  .link-card .info .desc { font-size:.82rem; color:var(--muted); margin-top:2px; }
+  .link-card .info .url { font-size:.72rem; color:#94a3b8; margin-top:3px; word-break:break-all; }
+  .copy { border:1px solid var(--border); background:#fff; border-radius:8px; padding:8px 12px; cursor:pointer; font-size:.8rem; white-space:nowrap; }
+  .copy:hover { background:#f0fdfa; border-color:var(--primary); color:var(--primary); }
+  footer { text-align:center; color:var(--muted); font-size:.8rem; padding:20px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🚴 Ciclismo y Más</h1>
+  <p>Links del sistema de garantías</p>
+</header>
+
+<div class="container">
+  <div class="section">Para compartir con clientes</div>
+  <div class="link-card">
+    <div class="icon">📝</div>
+    <div class="info">
+      <a href="index.html">Formulario de registro</a>
+      <div class="desc">Se lo envías al cliente para que registre su garantía</div>
+      <div class="url">https://camachogabriel.github.io/garantias-ciclismo-y-mas/</div>
+    </div>
+    <button class="copy" data-url="https://camachogabriel.github.io/garantias-ciclismo-y-mas/">Copiar link</button>
+  </div>
+  <div class="link-card">
+    <div class="icon">🔍</div>
+    <div class="info">
+      <a href="estado.html">Consulta de estado</a>
+      <div class="desc">El cliente revisa el estado con su código GC-XXXXXX</div>
+      <div class="url">https://camachogabriel.github.io/garantias-ciclismo-y-mas/estado.html</div>
+    </div>
+    <button class="copy" data-url="https://camachogabriel.github.io/garantias-ciclismo-y-mas/estado.html">Copiar link</button>
+  </div>
+
+  <div class="section">Uso interno</div>
+  <div class="link-card">
+    <div class="icon">🛠️</div>
+    <div class="info">
+      <a href="admin.html">Panel de administración</a>
+      <div class="desc">Gestionar garantías: estados, notas, cobros, fotos y correos</div>
+      <div class="url">https://camachogabriel.github.io/garantias-ciclismo-y-mas/admin.html</div>
+    </div>
+    <button class="copy" data-url="https://camachogabriel.github.io/garantias-ciclismo-y-mas/admin.html">Copiar link</button>
+  </div>
+
+  <div class="section">Herramientas (dashboards)</div>
+  <div class="link-card">
+    <div class="icon">🗄️</div>
+    <div class="info">
+      <a href="https://supabase.com/dashboard/project/cejgurbaweucfpuzvdpw" target="_blank">Supabase — Garantias Ciclismo y Mas</a>
+      <div class="desc">Base de datos, usuarios, storage y edge functions</div>
+    </div>
+  </div>
+  <div class="link-card">
+    <div class="icon">📦</div>
+    <div class="info">
+      <a href="https://github.com/camachogabriel/garantias-ciclismo-y-mas" target="_blank">GitHub — repositorio</a>
+      <div class="desc">Código del sistema y GitHub Pages</div>
+    </div>
+  </div>
+  <div class="link-card">
+    <div class="icon">📧</div>
+    <div class="info">
+      <a href="https://app.brevo.com" target="_blank">Brevo — correos</a>
+      <div class="desc">Estadísticas de envío y remitentes</div>
+    </div>
+  </div>
+</div>
+
+<footer>Ciclismo y Más — Sistema de garantías</footer>
+
+<script>
+document.querySelectorAll('.copy').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    await navigator.clipboard.writeText(btn.dataset.url);
+    const t = btn.textContent;
+    btn.textContent = '✓ Copiado';
+    setTimeout(() => btn.textContent = t, 1500);
+  });
+});
+</script>
+</body>
+</html>
