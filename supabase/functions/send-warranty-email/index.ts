@@ -3,12 +3,13 @@
 // Tipos:
 //   'registro'      -> al cliente, código de seguimiento (requiere tracking_code)
 //   'actualizacion' -> al cliente, cambio de estado + nota (requiere tracking_code)
-//   'rma'           -> interno, solicitud de RMA al fabricante (requiere rma_code)
+//   'rma'           -> interno, solicitud de RMA al fabricante (requiere rma_code), incluye tabla en el cuerpo y adjunto .xlsx
 // Configuración (secret de Edge Function o secreto en Vault):
 //   BREVO_API_KEY (requerido), FROM_EMAIL (ej: "Ciclismo y Más <hola@tudominio.com>"),
 //   STATUS_URL (link a la página de consulta de estado), RMA_NOTIFY_EMAIL (destino de correos de RMA)
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import * as XLSX from "npm:xlsx@0.18.5";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -109,6 +110,17 @@ Deno.serve(async (req: Request) => {
           </div>
         </div>`;
 
+      // Generar el archivo XLS adjunto con las mismas columnas de la tabla
+      const sheetData = [
+        ["Código", "Nombre", "Equipo", "Código 1", "Código 2"],
+        ...items.map((w) => [w.tracking_code, w.full_name, `${w.brand} ${w.model}`, w.code_1 ?? "", w.code_2 ?? ""]),
+      ];
+      const worksheet = XLSX.utils.aoa_to_sheet(sheetData);
+      worksheet["!cols"] = [{ wch: 12 }, { wch: 24 }, { wch: 22 }, { wch: 14 }, { wch: 14 }];
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "RMA");
+      const xlsBase64 = XLSX.write(workbook, { type: "base64", bookType: "xlsx" });
+
       const notifyEmail = (await getConf("RMA_NOTIFY_EMAIL")) ?? "camachogabriel@gmail.com";
       const res = await fetch("https://api.brevo.com/v3/smtp/email", {
         method: "POST",
@@ -118,6 +130,7 @@ Deno.serve(async (req: Request) => {
           to: [{ email: notifyEmail }],
           subject: `Solicitud de RMA ${rma.rma_code} — ${items.length} garantía(s)`,
           htmlContent: html,
+          attachment: [{ content: xlsBase64, name: `${rma.rma_code}.xlsx` }],
         }),
       });
       if (!res.ok) {
