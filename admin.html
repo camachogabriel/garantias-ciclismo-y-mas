@@ -25,20 +25,29 @@
   .btn:hover { background:var(--primary-dark); }
   .btn:disabled { opacity:.6; cursor:wait; }
   .btn.secondary { background:#fff; color:var(--text); border:1px solid var(--border); }
+  .btn.danger { background:#fff; color:#b91c1c; border:1px solid #fecaca; }
+  .btn.danger:hover { background:#fef2f2; }
   .btn.block { width:100%; margin-top:18px; }
   .msg { margin-top:12px; padding:10px 12px; border-radius:7px; font-size:.87rem; display:none; }
   .msg.error { display:block; background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; }
   .msg.ok { display:block; background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; }
+  /* Nav tabs */
+  .tabs { display:flex; gap:8px; margin-bottom:14px; }
+  .tab { padding:8px 16px; border-radius:7px; font-size:.88rem; font-weight:600; cursor:pointer; background:#fff; border:1px solid var(--border); color:var(--muted); }
+  .tab.active { background:var(--primary); color:#fff; border-color:var(--primary); }
   /* Lista */
-  .toolbar { display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap; }
+  .toolbar { display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap; align-items:center; }
   .toolbar input { flex:1; min-width:200px; }
   .toolbar select { width:auto; }
+  .selection-bar { display:none; align-items:center; gap:12px; background:#f0fdfa; border:1px solid #99f6e4; border-radius:8px; padding:10px 14px; margin-bottom:12px; font-size:.88rem; }
+  .selection-bar.show { display:flex; }
   table { width:100%; border-collapse:collapse; font-size:.88rem; }
   th { text-align:left; padding:10px 8px; border-bottom:2px solid var(--border); color:var(--muted); font-size:.78rem; text-transform:uppercase; letter-spacing:.5px; }
   td { padding:10px 8px; border-bottom:1px solid #f1f5f9; }
   tr.item { cursor:pointer; }
   tr.item:hover { background:#f8fafc; }
   .badge { display:inline-block; padding:3px 10px; border-radius:999px; color:#fff; font-size:.75rem; font-weight:600; white-space:nowrap; }
+  .badge.rma { background:#334155; }
   /* Detalle */
   .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:0 20px; }
   @media (max-width:700px){ .grid2 { grid-template-columns:1fr; } }
@@ -52,8 +61,11 @@
   .actions { display:flex; gap:10px; margin-top:20px; flex-wrap:wrap; }
   .info-row { padding:5px 0; font-size:.9rem; }
   .info-row b { color:var(--muted); font-weight:600; font-size:.8rem; display:block; }
-  #detailView { display:none; }
+  .code-row { display:grid; grid-template-columns:1fr 1fr; gap:0 10px; }
+  #detailView, #rmaListView, #rmaDetailView { display:none; }
   .back { color:var(--primary); cursor:pointer; font-weight:600; font-size:.88rem; margin-bottom:12px; display:inline-block; }
+  .rma-box { background:#f8fafc; border:1px solid var(--border); border-radius:8px; padding:12px 14px; margin-top:8px; font-size:.87rem; }
+  .rma-box a { color:var(--primary); font-weight:600; cursor:pointer; }
 </style>
 </head>
 <body>
@@ -78,8 +90,12 @@
     </div>
   </div>
 
-  <!-- LISTA -->
+  <!-- LISTA GARANTÍAS -->
   <div id="listView" style="display:none">
+    <div class="tabs">
+      <div class="tab active" id="tabGarantias">📋 Garantías</div>
+      <div class="tab" id="tabRma">📦 RMAs</div>
+    </div>
     <div class="card">
       <div class="toolbar">
         <input id="search" placeholder="Buscar por código, nombre, correo o modelo…">
@@ -88,15 +104,23 @@
         </select>
         <button class="btn secondary" id="refreshBtn">↻ Actualizar</button>
       </div>
+      <div class="selection-bar" id="selectionBar">
+        <span id="selectionCount"></span>
+        <button class="btn" id="generateRmaBtn">📦 Generar RMA</button>
+        <button class="btn secondary" id="clearSelectionBtn">Cancelar selección</button>
+      </div>
       <table>
-        <thead><tr><th>Código</th><th>Cliente</th><th>Equipo</th><th>Estado</th><th>Registrada</th></tr></thead>
+        <thead><tr>
+          <th style="width:28px"><input type="checkbox" id="selectAll"></th>
+          <th>Código</th><th>Cliente</th><th>Equipo</th><th>Estado</th><th>RMA</th><th>Registrada</th>
+        </tr></thead>
         <tbody id="tbody"></tbody>
       </table>
       <p id="emptyMsg" style="display:none; color:var(--muted); text-align:center; padding:24px;">Sin resultados</p>
     </div>
   </div>
 
-  <!-- DETALLE -->
+  <!-- DETALLE GARANTÍA -->
   <div id="detailView">
     <span class="back" id="backBtn">← Volver a la lista</span>
     <div class="card">
@@ -110,6 +134,10 @@
           <div class="info-row"><b>Equipo</b><span id="dEquipo"></span></div>
           <div class="info-row"><b>Fecha de compra</b><span id="dPurchase"></span></div>
           <div class="info-row"><b>Notas del defecto</b><span id="dDefect"></span></div>
+          <div id="dRmaBox" class="rma-box" style="display:none">
+            <b style="color:var(--muted); font-size:.75rem; text-transform:uppercase">RMA asociado</b>
+            <div id="dRmaInfo" style="margin-top:4px"></div>
+          </div>
           <div class="section-title">Fotos</div>
           <div class="photos" id="dPhotos"></div>
           <div style="margin-top:12px">
@@ -128,10 +156,26 @@
           <input id="fCharge" type="number" step="0.01" min="0" placeholder="0.00">
           <label>Detalle del cobro</label>
           <input id="fChargeNotes" placeholder="Ej: envío, repuesto…">
-          <label>Código 1 (biela)</label>
-          <input id="fCode1">
-          <label>Código 2 (biela)</label>
-          <input id="fCode2">
+          <div class="code-row">
+            <div>
+              <label>Código 1 (biela)</label>
+              <input id="fCode1">
+            </div>
+            <div>
+              <label>Código ANT+ 1</label>
+              <input id="fCode1Ant">
+            </div>
+          </div>
+          <div class="code-row">
+            <div>
+              <label>Código 2 (biela)</label>
+              <input id="fCode2">
+            </div>
+            <div>
+              <label>Código ANT+ 2</label>
+              <input id="fCode2Ant">
+            </div>
+          </div>
           <div class="section-title">Correo al cliente</div>
           <label>Nota para el cliente (se incluye en el correo)</label>
           <textarea id="fEmailNote" rows="2" placeholder="Mensaje opcional para el cliente"></textarea>
@@ -146,12 +190,69 @@
       </div>
     </div>
   </div>
+
+  <!-- LISTA RMA -->
+  <div id="rmaListView">
+    <div class="tabs">
+      <div class="tab" id="tabGarantias2">📋 Garantías</div>
+      <div class="tab active" id="tabRma2">📦 RMAs</div>
+    </div>
+    <div class="card">
+      <div class="toolbar">
+        <span style="color:var(--muted); font-size:.85rem">Envíos de garantías al fabricante</span>
+        <button class="btn secondary" id="refreshRmaBtn" style="margin-left:auto">↻ Actualizar</button>
+      </div>
+      <table>
+        <thead><tr><th>RMA</th><th>Garantías</th><th>Tracking envío</th><th>Tracking retorno</th><th>Creado</th></tr></thead>
+        <tbody id="rmaTbody"></tbody>
+      </table>
+      <p id="rmaEmptyMsg" style="display:none; color:var(--muted); text-align:center; padding:24px;">Aún no hay RMAs generados</p>
+    </div>
+  </div>
+
+  <!-- DETALLE RMA -->
+  <div id="rmaDetailView">
+    <span class="back" id="rmaBackBtn">← Volver a RMAs</span>
+    <div class="card">
+      <div class="grid2">
+        <div>
+          <div class="section-title">RMA</div>
+          <div class="info-row"><b>Código</b><span id="rCode" style="font-weight:700"></span></div>
+          <div class="info-row"><b>Creado</b><span id="rCreated"></span></div>
+          <div class="section-title">Garantías incluidas</div>
+          <div class="history" id="rItems"></div>
+        </div>
+        <div>
+          <div class="section-title">Envío al fabricante</div>
+          <label>Tracking de envío</label>
+          <input id="rTrackingOut" placeholder="Número de guía">
+          <label>Fecha de envío</label>
+          <input id="rDateOut" type="date">
+          <div class="section-title">Retorno</div>
+          <label>Tracking de retorno</label>
+          <input id="rTrackingIn" placeholder="Número de guía">
+          <label>Fecha de retorno</label>
+          <input id="rDateIn" type="date">
+          <label>Notas</label>
+          <textarea id="rNotes" rows="3"></textarea>
+          <div class="actions">
+            <button class="btn" id="rmaSaveBtn">💾 Guardar</button>
+            <button class="btn danger" id="rmaDeleteBtn">🗑️ Eliminar RMA</button>
+          </div>
+          <div class="msg" id="rmaDetailMsg"></div>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let warranties = [];
+let rmas = [];
 let current = null;
+let currentRma = null;
+let selectedIds = new Set();
 
 const $ = (id) => document.getElementById(id);
 const fmt = (d) => d ? new Date(d).toLocaleDateString('es-ES', { day:'2-digit', month:'short', year:'numeric' }) : '—';
@@ -169,8 +270,12 @@ async function init() {
   const { data: { session } } = await db.auth.getSession();
   session ? showList() : showLogin();
 }
-function showLogin() { $('loginView').style.display='block'; $('listView').style.display='none'; $('detailView').style.display='none'; $('logoutBtn').style.display='none'; }
-async function showList() { $('loginView').style.display='none'; $('detailView').style.display='none'; $('listView').style.display='block'; $('logoutBtn').style.display='inline-block'; await loadWarranties(); }
+function hideAll() {
+  ['loginView','listView','detailView','rmaListView','rmaDetailView'].forEach(id => $(id).style.display = 'none');
+}
+function showLogin() { hideAll(); $('loginView').style.display='block'; $('logoutBtn').style.display='none'; }
+async function showList() { hideAll(); $('listView').style.display='block'; $('logoutBtn').style.display='inline-block'; selectedIds.clear(); updateSelectionBar(); await loadWarranties(); await loadRmas(); }
+async function showRmaList() { hideAll(); $('rmaListView').style.display='block'; $('logoutBtn').style.display='inline-block'; await loadRmas(); renderRmaList(); }
 
 $('loginForm').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -180,8 +285,12 @@ $('loginForm').addEventListener('submit', async (e) => {
   showList();
 });
 $('logoutBtn').addEventListener('click', async () => { await db.auth.signOut(); showLogin(); });
+$('tabGarantias').addEventListener('click', showList);
+$('tabRma').addEventListener('click', showRmaList);
+$('tabGarantias2').addEventListener('click', showList);
+$('tabRma2').addEventListener('click', showRmaList);
 
-// ---------- Lista ----------
+// ---------- Lista de garantías ----------
 async function loadWarranties() {
   const { data, error } = await db.from('warranties').select('*').order('created_at', { ascending:false });
   if (error) { alert('Error cargando garantías: ' + error.message); return; }
@@ -195,25 +304,74 @@ function renderList() {
     (!fs || w.status === fs) &&
     (!q || [w.tracking_code, w.full_name, w.email, w.model, w.brand].join(' ').toLowerCase().includes(q))
   );
-  $('tbody').innerHTML = rows.map(w => `
-    <tr class="item" onclick="openDetail('${w.id}')">
-      <td><strong>${w.tracking_code}</strong></td>
-      <td>${w.full_name}</td>
-      <td>${w.brand} ${w.model}</td>
-      <td>${badge(w.status)}</td>
-      <td>${fmt(w.created_at)}</td>
-    </tr>`).join('');
+  $('tbody').innerHTML = rows.map(w => {
+    const rma = rmas.find(r => r.id === w.rma_id);
+    return `
+    <tr class="item" data-id="${w.id}">
+      <td onclick="event.stopPropagation()"><input type="checkbox" class="rowCheck" data-id="${w.id}" ${selectedIds.has(w.id) ? 'checked' : ''}></td>
+      <td onclick="openDetail('${w.id}')"><strong>${w.tracking_code}</strong></td>
+      <td onclick="openDetail('${w.id}')">${w.full_name}</td>
+      <td onclick="openDetail('${w.id}')">${w.brand} ${w.model}</td>
+      <td onclick="openDetail('${w.id}')">${badge(w.status)}</td>
+      <td onclick="openDetail('${w.id}')">${rma ? `<span class="badge rma">${rma.rma_code}</span>` : '—'}</td>
+      <td onclick="openDetail('${w.id}')">${fmt(w.created_at)}</td>
+    </tr>`;
+  }).join('');
   $('emptyMsg').style.display = rows.length ? 'none' : 'block';
+  document.querySelectorAll('.rowCheck').forEach(cb => {
+    cb.addEventListener('change', () => {
+      cb.checked ? selectedIds.add(cb.dataset.id) : selectedIds.delete(cb.dataset.id);
+      updateSelectionBar();
+    });
+  });
 }
+function updateSelectionBar() {
+  const n = selectedIds.size;
+  $('selectionBar').classList.toggle('show', n > 0);
+  $('selectionCount').textContent = `${n} garantía${n === 1 ? '' : 's'} seleccionada${n === 1 ? '' : 's'}`;
+  $('selectAll').checked = false;
+}
+$('selectAll').addEventListener('change', (e) => {
+  document.querySelectorAll('.rowCheck').forEach(cb => {
+    cb.checked = e.target.checked;
+    e.target.checked ? selectedIds.add(cb.dataset.id) : selectedIds.delete(cb.dataset.id);
+  });
+  updateSelectionBar();
+});
+$('clearSelectionBtn').addEventListener('click', () => { selectedIds.clear(); renderList(); updateSelectionBar(); });
 $('search').addEventListener('input', renderList);
 $('filterStatus').addEventListener('change', renderList);
-$('refreshBtn').addEventListener('click', loadWarranties);
+$('refreshBtn').addEventListener('click', async () => { await loadWarranties(); await loadRmas(); });
 
-// ---------- Detalle ----------
+$('generateRmaBtn').addEventListener('click', async () => {
+  if (!selectedIds.size) return;
+  if (!confirm(`¿Generar RMA para ${selectedIds.size} garantía(s)? Todas pasarán a estado "Enviada" y se notificará por correo.`)) return;
+  const btn = $('generateRmaBtn');
+  btn.disabled = true; btn.textContent = 'Generando…';
+  try {
+    const ids = [...selectedIds];
+    const { data: rmaCode, error } = await db.rpc('generate_rma', { p_warranty_ids: ids });
+    if (error) throw new Error(error.message);
+    try {
+      await db.functions.invoke('send-warranty-email', { body: { type: 'rma', rma_code: rmaCode } });
+    } catch (_) { /* el RMA ya quedó registrado, el correo es best-effort */ }
+    selectedIds.clear();
+    await loadWarranties();
+    await loadRmas();
+    renderList();
+    alert(`RMA ${rmaCode} generado. Se envió el correo a camachogabriel@gmail.com.`);
+  } catch (err) {
+    alert('Error generando RMA: ' + err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '📦 Generar RMA';
+  }
+});
+
+// ---------- Detalle de garantía ----------
 window.openDetail = async function(id) {
   current = warranties.find(w => w.id === id);
   if (!current) return;
-  $('listView').style.display='none'; $('detailView').style.display='block';
+  hideAll(); $('detailView').style.display='block'; $('logoutBtn').style.display='inline-block';
   $('detailMsg').style.display='none'; $('detailMsg').className='msg';
   $('dCode').textContent = current.tracking_code;
   $('dName').textContent = current.full_name;
@@ -228,8 +386,17 @@ window.openDetail = async function(id) {
   $('fChargeNotes').value = current.charge_notes || '';
   $('fCode1').value = current.code_1 || '';
   $('fCode2').value = current.code_2 || '';
+  $('fCode1Ant').value = current.code_1_ant || '';
+  $('fCode2Ant').value = current.code_2_ant || '';
   $('fEmailNote').value = '';
   $('upPhotos').value = '';
+  const rma = rmas.find(r => r.id === current.rma_id);
+  if (rma) {
+    $('dRmaBox').style.display = 'block';
+    $('dRmaInfo').innerHTML = `<a onclick="openRmaDetail('${rma.id}')">${rma.rma_code}</a> — tracking envío: ${rma.tracking_out || '—'} · tracking retorno: ${rma.tracking_in || '—'}`;
+  } else {
+    $('dRmaBox').style.display = 'none';
+  }
   renderPhotos();
   loadHistory(id);
 };
@@ -279,6 +446,8 @@ async function save(sendEmail) {
       charge_notes: $('fChargeNotes').value || null,
       code_1: $('fCode1').value || null,
       code_2: $('fCode2').value || null,
+      code_1_ant: $('fCode1Ant').value || null,
+      code_2_ant: $('fCode2Ant').value || null,
     };
     if (newPhotos.length) {
       const existing = current.admin_photos?.length ? current.admin_photos
@@ -311,6 +480,90 @@ async function save(sendEmail) {
 }
 $('saveBtn').addEventListener('click', () => save(false));
 $('saveEmailBtn').addEventListener('click', () => save(true));
+
+// ---------- RMAs ----------
+async function loadRmas() {
+  const { data, error } = await db.from('rma_requests').select('*').order('created_at', { ascending:false });
+  if (error) { console.error(error); return; }
+  rmas = data;
+}
+function renderRmaList() {
+  $('rmaTbody').innerHTML = rmas.map(r => {
+    const count = warranties.filter(w => w.rma_id === r.id).length;
+    return `
+    <tr class="item" onclick="openRmaDetail('${r.id}')">
+      <td><strong>${r.rma_code}</strong></td>
+      <td>${count}</td>
+      <td>${r.tracking_out || '—'}</td>
+      <td>${r.tracking_in || '—'}</td>
+      <td>${fmt(r.created_at)}</td>
+    </tr>`;
+  }).join('');
+  $('rmaEmptyMsg').style.display = rmas.length ? 'none' : 'block';
+}
+$('refreshRmaBtn').addEventListener('click', async () => { await loadWarranties(); await loadRmas(); renderRmaList(); });
+
+window.openRmaDetail = async function(id) {
+  await loadWarranties();
+  currentRma = rmas.find(r => r.id === id);
+  if (!currentRma) return;
+  hideAll(); $('rmaDetailView').style.display='block'; $('logoutBtn').style.display='inline-block';
+  $('rmaDetailMsg').style.display='none'; $('rmaDetailMsg').className='msg';
+  $('rCode').textContent = currentRma.rma_code;
+  $('rCreated').textContent = fmtDT(currentRma.created_at);
+  $('rTrackingOut').value = currentRma.tracking_out || '';
+  $('rDateOut').value = currentRma.date_out || '';
+  $('rTrackingIn').value = currentRma.tracking_in || '';
+  $('rDateIn').value = currentRma.date_in || '';
+  $('rNotes').value = currentRma.notes || '';
+  const items = warranties.filter(w => w.rma_id === id);
+  $('rItems').innerHTML = items.length
+    ? items.map(w => `<li>${w.tracking_code} — ${w.full_name} — ${w.brand} ${w.model}${w.code_1 ? ` — Cód.1: ${w.code_1}` : ''}${w.code_2 ? ` — Cód.2: ${w.code_2}` : ''}</li>`).join('')
+    : '<li>Sin garantías asociadas</li>';
+};
+$('rmaBackBtn').addEventListener('click', showRmaList);
+
+$('rmaSaveBtn').addEventListener('click', async () => {
+  const btn = $('rmaSaveBtn');
+  btn.disabled = true;
+  const msg = $('rmaDetailMsg');
+  msg.style.display = 'none';
+  try {
+    const { error } = await db.from('rma_requests').update({
+      tracking_out: $('rTrackingOut').value || null,
+      date_out: $('rDateOut').value || null,
+      tracking_in: $('rTrackingIn').value || null,
+      date_in: $('rDateIn').value || null,
+      notes: $('rNotes').value || null,
+    }).eq('id', currentRma.id);
+    if (error) throw new Error(error.message);
+    msg.className = 'msg ok';
+    msg.textContent = '✓ Guardado';
+    msg.style.display = 'block';
+    await loadRmas();
+  } catch (err) {
+    msg.className = 'msg error';
+    msg.textContent = err.message;
+    msg.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+$('rmaDeleteBtn').addEventListener('click', async () => {
+  if (!confirm(`¿Eliminar el RMA ${currentRma.rma_code}? Las garantías asociadas quedarán desvinculadas (su estado no cambia).`)) return;
+  const btn = $('rmaDeleteBtn');
+  btn.disabled = true;
+  try {
+    const { error } = await db.from('rma_requests').delete().eq('id', currentRma.id);
+    if (error) throw new Error(error.message);
+    await showRmaList();
+  } catch (err) {
+    alert('Error eliminando RMA: ' + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 init();
 </script>
