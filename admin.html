@@ -48,6 +48,8 @@
   tr.item:hover { background:#f8fafc; }
   .badge { display:inline-block; padding:3px 10px; border-radius:999px; color:#fff; font-size:.75rem; font-weight:600; white-space:nowrap; }
   .badge.rma { background:#334155; }
+  .badge.archived { background:#94a3b8; }
+  tr.item.is-archived { opacity:.55; }
   /* Detalle */
   .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:0 20px; }
   @media (max-width:700px){ .grid2 { grid-template-columns:1fr; } }
@@ -102,11 +104,15 @@
         <select id="filterStatus">
           <option value="">Todos los estados</option>
         </select>
+        <label style="display:flex; align-items:center; gap:6px; font-weight:600; font-size:.85rem; margin:0; white-space:nowrap">
+          <input type="checkbox" id="showArchived" style="width:auto"> Ver archivadas
+        </label>
         <button class="btn secondary" id="refreshBtn">↻ Actualizar</button>
       </div>
       <div class="selection-bar" id="selectionBar">
         <span id="selectionCount"></span>
         <button class="btn" id="generateRmaBtn">📦 Generar RMA</button>
+        <button class="btn secondary" id="archiveSelectedBtn">🗄️ Archivar</button>
         <button class="btn secondary" id="clearSelectionBtn">Cancelar selección</button>
       </div>
       <table>
@@ -186,6 +192,10 @@
           <div class="msg" id="detailMsg"></div>
           <div class="section-title">Historial de estados</div>
           <ul class="history" id="dHistory"></ul>
+          <div class="actions">
+            <button class="btn secondary" id="archiveBtn">🗄️ Archivar</button>
+            <button class="btn danger" id="deleteBtn">🗑️ Eliminar permanentemente</button>
+          </div>
         </div>
       </div>
     </div>
@@ -300,19 +310,21 @@ async function loadWarranties() {
 function renderList() {
   const q = $('search').value.toLowerCase().trim();
   const fs = $('filterStatus').value;
+  const showArchived = $('showArchived').checked;
   const rows = warranties.filter(w =>
+    (showArchived || !w.archived_at) &&
     (!fs || w.status === fs) &&
     (!q || [w.tracking_code, w.full_name, w.email, w.model, w.brand].join(' ').toLowerCase().includes(q))
   );
   $('tbody').innerHTML = rows.map(w => {
     const rma = rmas.find(r => r.id === w.rma_id);
     return `
-    <tr class="item" data-id="${w.id}">
+    <tr class="item${w.archived_at ? ' is-archived' : ''}" data-id="${w.id}">
       <td onclick="event.stopPropagation()"><input type="checkbox" class="rowCheck" data-id="${w.id}" ${selectedIds.has(w.id) ? 'checked' : ''}></td>
       <td onclick="openDetail('${w.id}')"><strong>${w.tracking_code}</strong></td>
       <td onclick="openDetail('${w.id}')">${w.full_name}</td>
       <td onclick="openDetail('${w.id}')">${w.brand} ${w.model}</td>
-      <td onclick="openDetail('${w.id}')">${badge(w.status)}</td>
+      <td onclick="openDetail('${w.id}')">${badge(w.status)}${w.archived_at ? ' <span class="badge archived">Archivada</span>' : ''}</td>
       <td onclick="openDetail('${w.id}')">${rma ? `<span class="badge rma">${rma.rma_code}</span>` : '—'}</td>
       <td onclick="openDetail('${w.id}')">${fmt(w.created_at)}</td>
     </tr>`;
@@ -341,7 +353,26 @@ $('selectAll').addEventListener('change', (e) => {
 $('clearSelectionBtn').addEventListener('click', () => { selectedIds.clear(); renderList(); updateSelectionBar(); });
 $('search').addEventListener('input', renderList);
 $('filterStatus').addEventListener('change', renderList);
+$('showArchived').addEventListener('change', renderList);
 $('refreshBtn').addEventListener('click', async () => { await loadWarranties(); await loadRmas(); });
+
+$('archiveSelectedBtn').addEventListener('click', async () => {
+  if (!selectedIds.size) return;
+  if (!confirm(`¿Archivar ${selectedIds.size} garantía(s)? Se ocultan de la lista pero se pueden restaurar desde el detalle.`)) return;
+  const btn = $('archiveSelectedBtn');
+  btn.disabled = true;
+  try {
+    const { error } = await db.from('warranties').update({ archived_at: new Date().toISOString() }).in('id', [...selectedIds]);
+    if (error) throw new Error(error.message);
+    selectedIds.clear();
+    await loadWarranties();
+    updateSelectionBar();
+  } catch (err) {
+    alert('Error archivando: ' + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 $('generateRmaBtn').addEventListener('click', async () => {
   if (!selectedIds.size) return;
@@ -397,6 +428,7 @@ window.openDetail = async function(id) {
   } else {
     $('dRmaBox').style.display = 'none';
   }
+  $('archiveBtn').textContent = current.archived_at ? '♻️ Restaurar' : '🗄️ Archivar';
   renderPhotos();
   loadHistory(id);
 };
@@ -480,6 +512,46 @@ async function save(sendEmail) {
 }
 $('saveBtn').addEventListener('click', () => save(false));
 $('saveEmailBtn').addEventListener('click', () => save(true));
+
+$('archiveBtn').addEventListener('click', async () => {
+  const archiving = !current.archived_at;
+  if (!confirm(archiving
+    ? `¿Archivar la garantía ${current.tracking_code}? Se oculta de la lista principal; puedes restaurarla después.`
+    : `¿Restaurar la garantía ${current.tracking_code} a la lista activa?`)) return;
+  const btn = $('archiveBtn');
+  btn.disabled = true;
+  try {
+    const { error } = await db.from('warranties')
+      .update({ archived_at: archiving ? new Date().toISOString() : null })
+      .eq('id', current.id);
+    if (error) throw new Error(error.message);
+    await loadWarranties();
+    showList();
+  } catch (err) {
+    alert('Error: ' + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+$('deleteBtn').addEventListener('click', async () => {
+  const ok1 = confirm(`¿Eliminar PERMANENTEMENTE la garantía ${current.tracking_code}? Esta acción no se puede deshacer (se borra también su historial de estados).`);
+  if (!ok1) return;
+  const ok2 = confirm('Confirma una vez más: esta garantía se eliminará para siempre.');
+  if (!ok2) return;
+  const btn = $('deleteBtn');
+  btn.disabled = true;
+  try {
+    const { error } = await db.from('warranties').delete().eq('id', current.id);
+    if (error) throw new Error(error.message);
+    await loadWarranties();
+    showList();
+  } catch (err) {
+    alert('Error eliminando: ' + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 // ---------- RMAs ----------
 async function loadRmas() {
