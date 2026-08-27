@@ -3,7 +3,8 @@
 // Tipos:
 //   'registro'      -> al cliente, código de seguimiento (requiere tracking_code)
 //   'actualizacion' -> al cliente, cambio de estado + nota (requiere tracking_code)
-//   'rma'           -> interno, solicitud de RMA al fabricante (requiere rma_code), incluye tabla en el cuerpo y adjunto .xlsx
+//   'rma'           -> interno, solicitud de RMA al fabricante (requiere rma_id, o rma_code como respaldo),
+//                      incluye tabla en el cuerpo y adjunto .xlsx
 // Configuración (secret de Edge Function o secreto en Vault):
 //   BREVO_API_KEY (requerido), FROM_EMAIL (ej: "Ciclismo y Más <hola@tudominio.com>"),
 //   STATUS_URL (link a la página de consulta de estado), RMA_NOTIFY_EMAIL (destino de correos de RMA)
@@ -31,12 +32,12 @@ Deno.serve(async (req: Request) => {
     new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
 
   try {
-    const { tracking_code, type, note, rma_code } = await req.json();
+    const { tracking_code, type, note, rma_code, rma_id } = await req.json();
     if (!["registro", "actualizacion", "rma"].includes(type)) {
       return json({ error: "Parámetros inválidos" }, 400);
     }
     if (type !== "rma" && !tracking_code) return json({ error: "Falta tracking_code" }, 400);
-    if (type === "rma" && !rma_code) return json({ error: "Falta rma_code" }, 400);
+    if (type === "rma" && !rma_id && !rma_code) return json({ error: "Falta rma_id o rma_code" }, 400);
 
     const db = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -62,11 +63,10 @@ Deno.serve(async (req: Request) => {
 
     // ---------- Correo interno: solicitud de RMA ----------
     if (type === "rma") {
-      const { data: rma, error: rmaErr } = await db
-        .from("rma_requests")
-        .select("id, rma_code, created_at")
-        .eq("rma_code", String(rma_code).trim().toUpperCase())
-        .single();
+      const rmaQuery = db.from("rma_requests").select("id, rma_code, created_at");
+      const { data: rma, error: rmaErr } = rma_id
+        ? await rmaQuery.eq("id", rma_id).single()
+        : await rmaQuery.eq("rma_code", String(rma_code).trim().toUpperCase()).single();
       if (rmaErr || !rma) return json({ error: "RMA no encontrado" }, 404);
 
       const { data: items, error: itemsErr } = await db

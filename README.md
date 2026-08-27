@@ -17,8 +17,8 @@ Seguimiento de garantías de medidores de potencia (Favero, Sigeyi, XOSS, 4iiii)
 2. El sistema genera un código `GC-XXXXXX` y se lo envía por correo.
 3. El cliente consulta el estado en `estado.html` con su código (solo ve estado, no datos personales).
 4. El equipo gestiona todo desde `admin.html`: cambia estados, agrega notas, cobros, códigos de bielas (código + ANT+) y fotos, y envía correos de actualización al cliente.
-5. Cuando una o varias garantías están listas para mandarse al fabricante, el equipo las selecciona en la lista y pulsa **Generar RMA**: se genera un código `RMA-XXXXXX`, todas las garantías seleccionadas pasan a estado **Enviada**, y se envía un correo a `camachogabriel@gmail.com` con la tabla (Código, Nombre, Equipo, Código 1, Código 2) para hacer el request al fabricante.
-6. En la pestaña **RMAs** del panel se edita el tracking de envío/retorno y sus fechas, y se puede eliminar un RMA (desvincula las garantías sin cambiar su estado).
+5. Cuando una o varias garantías están listas para mandarse al fabricante, el equipo las selecciona en la lista y pulsa **Generar RMA**: se crea un RMA con código placeholder **`RMA-TEMP`** (el número real y la guía de envío los asigna el fabricante después), todas las garantías seleccionadas pasan a estado **Enviada**, y se envía un correo a `camachogabriel@gmail.com` con la tabla (Código, Nombre, Equipo, Código 1, Código 2) y un archivo **.xlsx** adjunto con esos mismos datos, listo para el request al fabricante.
+6. En la pestaña **RMAs** del panel se **edita el código de RMA** (para reemplazar `RMA-TEMP` por el número real que dé el fabricante), el tracking de envío/retorno y sus fechas, y se puede eliminar un RMA (desvincula las garantías sin cambiar su estado). Los RMA con código pendiente se marcan con una etiqueta ámbar "RMA-TEMP" en las listas.
 
 ## Infraestructura (Supabase)
 
