@@ -57,6 +57,6 @@ Es un sitio estático: publicado con GitHub Pages desde este repo (branch `main`
 
 ## Estados
 
-`en_revision` → `aprobada` → `enviada` (automático al generar RMA) → `recibida` → `lista_para_entrega` | `rechazada`
+`en_revision` → `aprobada` → `enviada` (automático al generar RMA) → `recibida` → `lista_para_entrega` → `entregado` (se **archiva automáticamente**) | `cancelado` | `rechazada`
 
 Cada cambio de estado queda en `warranty_status_history` (con marca de si se notificó por correo 📧).
