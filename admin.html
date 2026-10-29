@@ -195,6 +195,10 @@
             </div>
           </div>
           <div class="section-title">Correo al cliente</div>
+          <label style="display:flex;align-items:center;gap:8px;font-weight:600;margin:0 0 8px">
+            <input type="checkbox" id="fNotify" style="width:auto"> Enviar correos de actualización a este cliente
+          </label>
+          <div style="font-size:.75rem;color:var(--muted);margin-bottom:8px">Desmárcalo para entradas de prueba o internas: no se enviará ningún correo de estado ni de RMA a esta garantía.</div>
           <label>Nota para el cliente (se incluye en el correo)</label>
           <textarea id="fEmailNote" rows="2" placeholder="Mensaje opcional para el cliente"></textarea>
           <div class="actions">
@@ -415,21 +419,36 @@ $('prelimBtn').addEventListener('click', async () => {
 
 $('generateRmaBtn').addEventListener('click', async () => {
   if (!selectedIds.size) return;
-  if (!confirm(`¿Generar RMA para ${selectedIds.size} garantía(s)? Todas pasarán a estado "Enviada" y se notificará por correo. El código y la guía de envío quedan como pendientes hasta que el fabricante los asigne — podrás editarlos después.`)) return;
+  const rmaCode = prompt(`Código de RMA que dio el fabricante (${selectedIds.size} garantía(s)).\nDéjalo vacío para usar RMA-TEMP y editarlo después:`, '');
+  if (rmaCode === null) return;
+  const tracking = prompt('Número de guía de envío (opcional, puedes dejarlo vacío):', '');
+  if (tracking === null) return;
+  if (!confirm(`¿Generar el RMA ${rmaCode.trim() || 'RMA-TEMP'} para ${selectedIds.size} garantía(s)? Todas pasarán a "Enviada" y se enviará correo de actualización a los clientes (salvo los que tengan los correos desactivados).`)) return;
   const btn = $('generateRmaBtn');
   btn.disabled = true; btn.textContent = 'Generando…';
   try {
     const ids = [...selectedIds];
-    const { data: rmaId, error } = await db.rpc('generate_rma', { p_warranty_ids: ids });
+    const toNotify = warranties.filter(w => ids.includes(w.id));
+    const { data: rmaId, error } = await db.rpc('generate_rma', { p_warranty_ids: ids, p_rma_code: rmaCode.trim(), p_tracking_out: tracking.trim() });
     if (error) throw new Error(error.message);
     try {
       await db.functions.invoke('send-warranty-email', { body: { type: 'rma', rma_id: rmaId } });
     } catch (_) { /* el RMA ya quedó registrado, el correo es best-effort */ }
+    let sent = 0, failed = 0;
+    for (const w of toNotify) {
+      if (w.notify_email === false) continue;
+      try {
+        const { data: d, error: e } = await db.functions.invoke('send-warranty-email', {
+          body: { tracking_code: w.tracking_code, type: 'actualizacion', note: tracking.trim() ? `Tu equipo fue enviado al fabricante. Guía de envío: ${tracking.trim()}` : null },
+        });
+        if (e) failed++; else if (!d?.skipped) sent++;
+      } catch (_) { failed++; }
+    }
     selectedIds.clear();
     await loadWarranties();
     await loadRmas();
     renderList();
-    alert('RMA generado (código pendiente: RMA-TEMP) y correo enviado a camachogabriel@gmail.com. Edítalo en la pestaña RMAs cuando el fabricante te dé el número real.');
+    alert(`RMA generado y correo interno enviado. Correos a clientes: ${sent} enviado(s)${failed ? `, ${failed} fallaron` : ''}.`);
     openRmaDetail(rmaId);
   } catch (err) {
     alert('Error generando RMA: ' + err.message);
@@ -466,6 +485,7 @@ window.openDetail = async function(id) {
   $('fCode1Ant').value = current.code_1_ant || '';
   $('fCode2Ant').value = current.code_2_ant || '';
   $('fEmailNote').value = '';
+  $('fNotify').checked = current.notify_email !== false;
   $('upPhotos').value = '';
   const rma = rmas.find(r => r.id === current.rma_id);
   if (rma) {
@@ -529,6 +549,7 @@ async function save(sendEmail) {
       model: $('eModel').value.trim(),
       purchase_date: $('ePurchase').value || null,
       defect_notes: $('eDefect').value.trim() || null,
+      notify_email: $('fNotify').checked,
       status: $('fStatus').value,
       admin_notes: $('fNotes').value || null,
       charge_amount: $('fCharge').value === '' ? null : parseFloat($('fCharge').value),
@@ -546,14 +567,18 @@ async function save(sendEmail) {
     const { error } = await db.from('warranties').update(update).eq('id', current.id);
     if (error) throw new Error(error.message);
 
+    let skipped = false;
     if (sendEmail) {
-      const { error: fnErr } = await db.functions.invoke('send-warranty-email', {
+      const { data: fnData, error: fnErr } = await db.functions.invoke('send-warranty-email', {
         body: { tracking_code: current.tracking_code, type: 'actualizacion', note: $('fEmailNote').value || null },
       });
       if (fnErr) throw new Error('Guardado, pero el correo falló: ' + fnErr.message);
+      skipped = !!fnData?.skipped;
     }
     msg.className = 'msg ok';
-    msg.textContent = sendEmail ? '✓ Guardado y correo enviado' : '✓ Guardado';
+    msg.textContent = !sendEmail ? '✓ Guardado'
+      : skipped ? '✓ Guardado (correo NO enviado: los correos están desactivados para esta garantía)'
+      : '✓ Guardado y correo enviado';
     msg.style.display = 'block';
     await loadWarranties();
     current = warranties.find(w => w.id === current.id);
