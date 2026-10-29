@@ -135,12 +135,22 @@
         <div>
           <div class="section-title">Cliente</div>
           <div class="info-row"><b>Código</b><span id="dCode" style="font-weight:700"></span></div>
-          <div class="info-row"><b>Nombre</b><span id="dName"></span></div>
-          <div class="info-row"><b>Teléfonos</b><span id="dPhones"></span></div>
-          <div class="info-row"><b>Correo</b><span id="dEmail"></span></div>
-          <div class="info-row"><b>Equipo</b><span id="dEquipo"></span></div>
-          <div class="info-row"><b>Fecha de compra</b><span id="dPurchase"></span></div>
-          <div class="info-row"><b>Notas del defecto</b><span id="dDefect"></span></div>
+          <label>Nombre</label>
+          <input id="eName">
+          <div class="code-row">
+            <div><label>Teléfono</label><input id="ePhone"></div>
+            <div><label>Teléfono alterno</label><input id="ePhoneAlt"></div>
+          </div>
+          <label>Correo</label>
+          <input id="eEmail" type="email">
+          <div class="code-row">
+            <div><label>Marca</label><select id="eBrand"></select></div>
+            <div><label>Modelo</label><input id="eModel"></div>
+          </div>
+          <label>Fecha de compra</label>
+          <input id="ePurchase" type="date">
+          <label>Notas del defecto</label>
+          <textarea id="eDefect" rows="3"></textarea>
           <div id="dRmaBox" class="rma-box" style="display:none">
             <b style="color:var(--muted); font-size:.75rem; text-transform:uppercase">RMA asociado</b>
             <div id="dRmaInfo" style="margin-top:4px"></div>
@@ -410,12 +420,18 @@ window.openDetail = async function(id) {
   hideAll(); $('detailView').style.display='block'; $('logoutBtn').style.display='inline-block';
   $('detailMsg').style.display='none'; $('detailMsg').className='msg';
   $('dCode').textContent = current.tracking_code;
-  $('dName').textContent = current.full_name;
-  $('dPhones').textContent = [current.phone, current.phone_alt].filter(Boolean).join(' / ');
-  $('dEmail').textContent = current.email;
-  $('dEquipo').textContent = `${current.brand} ${current.model}`;
-  $('dPurchase').textContent = fmt(current.purchase_date);
-  $('dDefect').textContent = current.defect_notes || '—';
+  $('eName').value = current.full_name || '';
+  $('ePhone').value = current.phone || '';
+  $('ePhoneAlt').value = current.phone_alt || '';
+  $('eEmail').value = current.email || '';
+  const brandSel = $('eBrand');
+  brandSel.innerHTML = '';
+  const brands = MARCAS.includes(current.brand) ? MARCAS : [current.brand, ...MARCAS];
+  brands.forEach(b => brandSel.add(new Option(b, b)));
+  brandSel.value = current.brand;
+  $('eModel').value = current.model || '';
+  $('ePurchase').value = current.purchase_date || '';
+  $('eDefect').value = current.defect_notes || '';
   $('fStatus').value = current.status;
   $('fNotes').value = current.admin_notes || '';
   $('fCharge').value = current.charge_amount ?? '';
@@ -476,7 +492,18 @@ async function save(sendEmail) {
   msg.style.display = 'none';
   try {
     const newPhotos = await uploadSelectedPhotos();
+    if (!$('eName').value.trim() || !$('ePhone').value.trim() || !$('eEmail').value.trim() || !$('eModel').value.trim()) {
+      throw new Error('Nombre, teléfono, correo y modelo son obligatorios');
+    }
     const update = {
+      full_name: $('eName').value.trim(),
+      phone: $('ePhone').value.trim(),
+      phone_alt: $('ePhoneAlt').value.trim() || null,
+      email: $('eEmail').value.trim(),
+      brand: $('eBrand').value,
+      model: $('eModel').value.trim(),
+      purchase_date: $('ePurchase').value || null,
+      defect_notes: $('eDefect').value.trim() || null,
       status: $('fStatus').value,
       admin_notes: $('fNotes').value || null,
       charge_amount: $('fCharge').value === '' ? null : parseFloat($('fCharge').value),
