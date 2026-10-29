@@ -112,6 +112,7 @@
       </div>
       <div class="selection-bar" id="selectionBar">
         <span id="selectionCount"></span>
+        <button class="btn secondary" id="prelimBtn">📝 Generar preliminar</button>
         <button class="btn" id="generateRmaBtn">📦 Generar RMA</button>
         <button class="btn secondary" id="archiveSelectedBtn">🗄️ Archivar</button>
         <button class="btn secondary" id="clearSelectionBtn">Cancelar selección</button>
@@ -385,6 +386,30 @@ $('archiveSelectedBtn').addEventListener('click', async () => {
     alert('Error archivando: ' + err.message);
   } finally {
     btn.disabled = false;
+  }
+});
+
+$('prelimBtn').addEventListener('click', async () => {
+  if (!selectedIds.size) return;
+  if (!confirm(`¿Generar preliminar para ${selectedIds.size} garantía(s)? Se enviará un correo a camachogabriel@gmail.com con la lista (código, modelo, ANT+) para pedir el RMA al fabricante, y las garantías pasarán a "Pendiente RMA".`)) return;
+  const btn = $('prelimBtn');
+  btn.disabled = true; btn.textContent = 'Enviando…';
+  try {
+    const ids = [...selectedIds];
+    const { error } = await db.from('warranties').update({ status: 'pendiente_rma' }).in('id', ids);
+    if (error) throw new Error(error.message);
+    const { error: fnErr } = await db.functions.invoke('send-warranty-email', { body: { type: 'preliminar', warranty_ids: ids } });
+    selectedIds.clear();
+    await loadWarranties();
+    renderList();
+    updateSelectionBar();
+    alert(fnErr
+      ? 'Las garantías pasaron a "Pendiente RMA", pero el correo falló: ' + fnErr.message
+      : 'Preliminar enviado a camachogabriel@gmail.com. Las garantías quedaron en "Pendiente RMA".');
+  } catch (err) {
+    alert('Error generando preliminar: ' + err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '📝 Generar preliminar';
   }
 });
 

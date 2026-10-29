@@ -5,7 +5,8 @@ const SUPABASE_ANON_KEY = 'sb_publishable_qXqEI0bVkwXtH8eqByoPqQ_9dVp8KTI';
 const ESTADOS = {
   en_revision:        { label: 'En revisión',        color: '#f59e0b' },
   aprobada:           { label: 'Aprobada',            color: '#3b82f6' },
-  enviada:            { label: 'Enviada',             color: '#8b5cf6' },
+  pendiente_rma:      { label: 'Pendiente RMA',       color: '#f97316' },
+  enviada:          { label: 'Enviada',             color: '#8b5cf6' },
   recibida:           { label: 'Recibida',            color: '#06b6d4' },
   lista_para_entrega: { label: 'Lista para entrega',  color: '#22c55e' },
   entregado:          { label: 'Entregado',           color: '#15803d' },
